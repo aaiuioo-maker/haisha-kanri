@@ -17,7 +17,8 @@ function New-Icon([int]$size, [string]$path, [bool]$mascot = $true) {
   if ($mascot) {
     $g.SmoothingMode = 'None'; $g.PixelOffsetMode = 'Half'
     $dot = [Math]::Max(1, [Math]::Round(2 * $s))   # 1ドットの大きさ（180px では 2px）
-    $ox = [Math]::Round(7 * $s); $oy = [Math]::Round(8 * $s)
+    # iPhoneはアイコンの角を丸く切り取るので、角から少し内側に置いて全部見えるようにする
+    $ox = [Math]::Round(11 * $s); $oy = [Math]::Round(21 * $s)
     $orange = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0xd9,0x77,0x57))
     $dark   = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0x1a,0x16,0x12))
     # [x, y, 幅, 高さ]（ドット単位）
