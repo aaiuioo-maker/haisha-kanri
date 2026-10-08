@@ -278,6 +278,30 @@
 
         .export-mode .driver-group-text { display: none !important; }
         .export-mode .gassho-day-toggle { display: none !important; }
+        /* === Claude Code のキャラクター（ホーム画面の左上） === */
+        #step0 { position: relative; }
+        .cc-mascot {
+            position: absolute; top: 10px; left: 20px; z-index: 2;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            text-decoration: none;
+        }
+        .cc-mascot svg {
+            width: 36px; height: 27px;
+            shape-rendering: crispEdges; overflow: visible; transform-origin: center;
+        }
+        /* 歩く・立ち止まる・手足の動きは、下のスクリプト（ccMascot）で1コマずつ動かしている */
+        .cc-mascot .cc-label {
+            font-family: -apple-system, "Segoe UI", sans-serif;
+            font-size: 7px; letter-spacing: 0.05em; color: #d97757; opacity: 0.8; white-space: nowrap;
+        }
+        .cc-body { fill: #d97757; }
+        .cc-eye { fill: #1a1612; transform-box: fill-box; transform-origin: center; }
+        /* ときどきまばたき */
+        .cc-eye { animation: cc-blink 4s infinite; }
+        @keyframes cc-blink {
+            0%, 92%, 100% { transform: scaleY(1); }
+            95%           { transform: scaleY(0.1); }
+        }
 /* === カレンダー画面 === */
         .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 6px; }
         .cal-nav-btn { background: var(--main-blue); color: white; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 1.3rem; flex: none; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -348,6 +372,24 @@
 </div>
 
 <div id="step0" class="step-container active">
+    <a class="cc-mascot" href="https://claude.com/claude-code" target="_blank" rel="noopener" title="Claude Code で作成" aria-label="Claude Code で作成">
+        <!-- 1マス＝1ドットのドット絵（横12×縦8マス：体6段＋足2段） -->
+        <svg viewBox="0 -1 12 9" aria-hidden="true">
+            <!-- 足（左から順に4本）。上げるときは高さを1マスにする -->
+            <rect class="cc-body cc-leg" x="2" y="6" width="1" height="2"/>
+            <rect class="cc-body cc-leg" x="4" y="6" width="1" height="2"/>
+            <rect class="cc-body cc-leg" x="7" y="6" width="1" height="2"/>
+            <rect class="cc-body cc-leg" x="9" y="6" width="1" height="2"/>
+            <g class="cc-hop">
+                <rect class="cc-body" x="2" y="0" width="8" height="6"/>
+                <rect class="cc-body cc-arm-l" x="0" y="2" width="2" height="2"/>
+                <rect class="cc-body cc-arm-r" x="10" y="2" width="2" height="2"/>
+                <rect class="cc-eye" x="3" y="1" width="1" height="1"/>
+                <rect class="cc-eye" x="8" y="1" width="1" height="1"/>
+            </g>
+        </svg>
+        <span class="cc-label">Claude Code</span>
+    </a>
     <div style="text-align: center; margin-top: 30px; margin-bottom: 40px;">
         <h1 style="border:none; font-size: 1.4rem; color: var(--main-blue); margin-bottom: 5px;">🚗 山科支部</h1>
         <h1 style="border:none; font-size: 1.8rem; color: #000; margin-top: 0;">配車管理アプリ</h1>
@@ -1953,6 +1995,66 @@ function openHaishaFromCal(key) {
     }, 100);
 }
 
+
+// =============================================================
+// Claude Code のキャラクター（ホーム画面の左上）
+//   右へ歩く → 端で立ち止まって手足をちょこちょこ動かし、振り向く → 左へ戻る … を繰り返す
+// =============================================================
+(function ccMascot() {
+    const svg = document.querySelector(".cc-mascot svg");
+    if (!svg) return;
+
+    const body = svg.querySelector(".cc-hop");
+    const armL = svg.querySelector(".cc-arm-l");
+    const armR = svg.querySelector(".cc-arm-r");
+    const legs = Array.from(svg.querySelectorAll(".cc-leg")); // 左から順に4本
+
+    const HALF = 12;        // 真ん中から左右それぞれに歩く幅（px）
+    const STEP = 2;         // 1歩で進む距離（px）
+    const TICK = 220;       // 1コマの長さ（ミリ秒）
+    const IDLE_TICKS = 9;   // 端で立ち止まるコマ数
+
+    let x = -HALF, dir = 1, mode = "idle", t = 0;
+
+    const legUp = (i, up) => legs[i].setAttribute("height", up ? 1 : 2);
+    const armUp = (el, up) => el.setAttribute("y", up ? 1 : 2);
+    const bob = up => body.setAttribute("transform", up ? "translate(0,-1)" : "");
+    const rest = () => { legs.forEach((_, i) => legUp(i, false)); armUp(armL, false); armUp(armR, false); bob(false); };
+    const draw = () => { svg.style.transform = `translateX(${x}px) scaleX(${dir})`; };
+
+    function tick() {
+        // ホーム画面が表示されていない間は動かさない（電池の節約）
+        if (!document.getElementById('step0').classList.contains('active') || document.hidden) return;
+        t++;
+        if (mode === "walk") {
+            // 歩く：外側2本と内側2本の足を交互に上げ、体も小さく弾ませる
+            const ph = t % 2;
+            armUp(armL, false); armUp(armR, false);
+            legUp(0, ph === 0); legUp(2, ph === 0);
+            legUp(1, ph === 1); legUp(3, ph === 1);
+            bob(ph === 0);
+            x += STEP * dir;
+            if (x <= -HALF || x >= HALF) {
+                x = Math.max(-HALF, Math.min(HALF, x));
+                mode = "idle"; t = 0; rest();
+            }
+        } else {
+            // 立ち止まり：両腕を交互に上げ下げし、端の足でトントンと足踏み
+            const ph = t % 4;
+            armUp(armL, ph === 1);
+            armUp(armR, ph === 3);
+            legUp(0, ph === 2);
+            legUp(3, ph === 0);
+            bob(false);
+            if (t === Math.floor(IDLE_TICKS / 2)) dir = (x >= HALF) ? -1 : 1; // 途中で振り向く
+            if (t >= IDLE_TICKS) { mode = "walk"; t = 0; rest(); }
+        }
+        draw();
+    }
+
+    draw();
+    setInterval(tick, TICK);
+})();
 
 // === メインの処理を安全に起動 ===
 window.addEventListener('DOMContentLoaded', () => {
