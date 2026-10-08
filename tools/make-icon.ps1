@@ -31,6 +31,6 @@ function New-Icon([int]$size, [string]$path, [bool]$mascot = $true) {
   $g.Dispose(); $bmp.Dispose()
 }
 
-New-Icon 512 (Join-Path $outDir 'icon-512.png')
-New-Icon 180 (Join-Path $outDir 'apple-touch-icon.png')
+New-Icon 512 (Join-Path $outDir 'icon-512-v3.png')
+New-Icon 180 (Join-Path $outDir 'apple-touch-icon-v3.png')
 New-Icon 32  (Join-Path $outDir 'favicon-32.png') $false
