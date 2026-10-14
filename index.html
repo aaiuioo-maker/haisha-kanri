@@ -1385,17 +1385,44 @@ function autoAssign() {
         "林紀代美": "林車", "伊藤雅文": "林車", "田ノ上張穎": "林車", "足立香代子": "林車",
         "森井輝夫": "森井車", "足立つぐる": "森井車", "前川袈裟次": "前川車"
     };
-    let remaining = []; let assignedCount = 0;
+    // 名前・車の名前は、空白や役割（L| など）、古いデータの「車」の有無に関係なく同じ人・同じ車として比べる
+    const personKey = m => formatName(m).name.replace(/\s+/g, '');
+    const carKey = n => String(n || '').replace(/\s+/g, '').replace(/車$/, '');
+    const findActiveCar = name => activeCars.find(c => carKey(c.name) === carKey(name));
 
+    // 保存済みの配車表を新しい順に見て、「人 → 前に乗った車」の表を作る
+    // 前回の車が今回走らないときは、その前に乗った車を探す
+    const curKey = `${document.getElementById('eventDate').value}_${document.getElementById('eventName').value}`;
+    const history = loadHistory();
+    const pastKeys = getSortedHistoryKeys().filter(k => k !== curKey).reverse();
+    const lastCarOf = {};
+    pastKeys.forEach(k => {
+        const cars = (history[k] && Array.isArray(history[k].activeCars)) ? history[k].activeCars : [];
+        cars.forEach(c => {
+            if (!c || !Array.isArray(c.members) || !findActiveCar(c.name)) return;
+            c.members.forEach(m => { const p = personKey(m); if (p && !lastCarOf[p]) lastCarOf[p] = c.name; });
+        });
+    });
+
+    let remaining = []; let fromHistory = 0; let fromFixed = 0;
     currentUnassigned.forEach(m => {
-        const f = formatName(m); const cleanName = f.name.replace(/\s+/g, ''); const targetCarName = fixedAutoAssignMap[cleanName];
-        if (targetCarName) { let targetCar = activeCars.find(c => c.name === targetCarName); if (targetCar) { targetCar.members.push(m); assignedCount++; } else remaining.push(m); }
-        else remaining.push(m);
+        const p = personKey(m);
+        let car = lastCarOf[p] ? findActiveCar(lastCarOf[p]) : null;
+        if (car) { car.members.push(m); fromHistory++; return; }
+        // まだ一度も乗ったことのない人は、これまでの決まった組み合わせで入れる
+        car = fixedAutoAssignMap[p] ? findActiveCar(fixedAutoAssignMap[p]) : null;
+        if (car) { car.members.push(m); fromFixed++; return; }
+        remaining.push(m);
     });
     currentUnassigned = remaining; renderAssignment();
 
-    if (assignedCount > 0) { playSound('save'); setTimeout(() => alert(`画像で指定された定型パターンをもとに ${assignedCount}名 を自動振り分けしました！\n（それ以外の参拝者は「振り分け待ち」に残っています）`), 50);
-    } else { playSound('delete'); setTimeout(() => alert("自動振り分けの対象となる参拝者がいないか、対象の車が選ばれていません。"), 50); }
+    const assignedCount = fromHistory + fromFixed;
+    if (assignedCount > 0) {
+        let msg = `${assignedCount}名 を自動で振り分けました！\n・前回と同じ車：${fromHistory}名`;
+        if (fromFixed > 0) msg += `\n・決まった組み合わせ：${fromFixed}名`;
+        if (remaining.length > 0) msg += `\n\n残りの ${remaining.length}名 は「振り分け待ち」にいます。`;
+        playSound('save'); setTimeout(() => alert(msg), 50);
+    } else { playSound('delete'); setTimeout(() => alert("自動で振り分けられる人がいませんでした。\n（前に乗った車が今回選ばれていないか、振り分け待ちに誰もいません）"), 50); }
 }
 
 let carSortables = [];
