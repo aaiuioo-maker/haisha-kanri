@@ -1934,17 +1934,59 @@ function exportData() {
 function importData(event) {
     const file = event.target.files[0]; if (!file) return; playSound('click');
     setTimeout(() => {
-        if (!confirm('現在のデータは上書きされます。読み込んでもよろしいですか？')) { event.target.value = ''; return; }
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
                 const data = JSON.parse(e.target.result);
+                // 参拝者だけのファイル（addEvents）は、今のデータに足すだけ。上書きはしない
+                if (Array.isArray(data.addEvents)) { mergeSanpaiEvents(data.addEvents); event.target.value = ''; return; }
+                if (!confirm('現在のデータは上書きされます。読み込んでもよろしいですか？')) { event.target.value = ''; return; }
                 if (data.history) localStorage.setItem('carpool_history', data.history); if (data.groups) localStorage.setItem('carpool_masterGroups', data.groups); if (data.drivers) localStorage.setItem('carpool_masterDrivers', data.drivers); if (data.memo) localStorage.setItem('carpool_total_memo', data.memo); if (data.calevents) localStorage.setItem('carpool_cal_events', data.calevents); if (data.groupColorMap) localStorage.setItem('carpool_groupColorMap', data.groupColorMap); if (data.customEventNames) localStorage.setItem('carpool_customEventNames', data.customEventNames);
                 playSound('save'); setTimeout(() => { alert('データの復元が完了しました！アプリを再読み込みします。'); location.reload(); }, 100);
             } catch (err) { playSound('delete'); setTimeout(() => alert('ファイルの読み込みに失敗しました。正しいバックアップファイルを選んでください。'), 50); }
             event.target.value = '';
         }; reader.readAsText(file);
     }, 50);
+}
+
+// 参拝者だけのファイルを、今のデータに足す（名簿・車・他の配車表はそのまま）
+//   形：{ addEvents: [ { date:"2026-11-01", event:"MC", members:[ {name:"市村潤子", role:"P"}, ... ] } ] }
+//   名前は今の名簿と空白を無視して照らし合わせ、見つかれば名簿の書き方（役割つき）で入れる
+function mergeSanpaiEvents(events) {
+    const norm = s => String(s || '').replace(/[\s　]+/g, '');
+    const rosterByName = {};
+    Object.values(masterGroups).forEach(names => { if (Array.isArray(names)) names.forEach(n => { rosterByName[norm(formatName(n).name)] = n; }); });
+
+    const history = loadHistory();
+    const notFound = new Set(); const done = [];
+    events.forEach(ev => {
+        if (!ev || !ev.date || !ev.event || !Array.isArray(ev.members)) return;
+        const members = [];
+        ev.members.forEach(m => {
+            const name = typeof m === 'string' ? m : m.name;
+            const hit = rosterByName[norm(name)];
+            if (hit) members.push(hit);
+            else { notFound.add(name); members.push(m.role ? `${m.role}|${name}` : name); }
+        });
+        const key = `${ev.date}_${ev.event}`;
+        const cur = history[key];
+        if (cur) {
+            // 同じ日の配車表がすでにあれば、車の振り分けは残したまま、足りない人だけ足す
+            const inCars = new Set((cur.activeCars || []).reduce((a, c) => a.concat(c.members || []), []));
+            cur.currentUnassigned = cur.currentUnassigned || [];
+            members.forEach(m => { if (!inCars.has(m) && !cur.currentUnassigned.includes(m)) cur.currentUnassigned.push(m); });
+            cur.checkedMembers = [...new Set([...(cur.checkedMembers || []), ...members])];
+        } else {
+            history[key] = { date: ev.date, event: ev.event, memo: "", activeCars: [], currentUnassigned: members, memberRoles: {}, hasGassho: false, checkedMembers: members, checkedDrivers: [] };
+        }
+        done.push(`${ev.date.replace(/-/g, '/')} ${ev.event}（${members.length}名）`);
+    });
+    saveHistory(history); updateHistoryList();
+
+    let msg = `参拝者を足しました！（今までのデータはそのままです）\n\n${done.join('\n')}`;
+    if (notFound.size) msg += `\n\n名簿にいなかった人（名簿に足すか確かめてください）：\n${[...notFound].join('、')}`;
+    msg += `\n\n「新しく配車表を作成・修正」で日付を選んで「よみこむ」を押すと続きから作れます。`;
+    playSound('save'); setTimeout(() => alert(msg), 100);
 }
 
 function resetMasterData() {
