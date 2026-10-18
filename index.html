@@ -577,13 +577,13 @@
     <div class="nav-btns">
         <button class="prev-btn" onclick="goStep(1)">← もどる</button>
         <button class="save-btn" onclick="saveCurrentState(true)">💾 保存</button>
-        <button class="next-btn" onclick="goStep(3)">配車選択へ →</button>
+        <button class="next-btn" onclick="checkOwnerCars(); goStep(3)">配車選択へ →</button>
     </div>
     <div id="attendeeGrid"></div>
     <div class="nav-btns">
         <button class="prev-btn" onclick="goStep(1)">← もどる</button>
         <button class="save-btn" onclick="saveCurrentState(true)">💾 保存</button>
-        <button class="next-btn" onclick="goStep(3)">配車選択へ →</button>
+        <button class="next-btn" onclick="checkOwnerCars(); goStep(3)">配車選択へ →</button>
     </div>
 </div>
 
@@ -594,6 +594,7 @@
         <button class="save-btn" onclick="saveCurrentState(true)">💾 保存</button>
         <button class="next-btn" onclick="prepareAssignment()">振り分け設定へ →</button>
     </div>
+    <div id="ownerCarNote" style="display:none; background:#eef7ee; color:#2e7d32; border-radius:8px; padding:8px 10px; font-size:0.8rem; margin:0 4px 10px;"></div>
     <div class="grid" id="driverGrid"></div>
     <div class="nav-btns">
         <button class="prev-btn" onclick="goStep(2)">← もどる</button>
@@ -1034,6 +1035,23 @@ function toggleGroup(groupId) {
     playSound('click');
     const content = document.getElementById(groupId); const icon = document.getElementById('icon_' + groupId);
     if (content.style.display === 'none') { content.style.display = 'grid'; icon.innerText = '▼'; } else { content.style.display = 'none'; icon.innerText = '▶'; }
+}
+
+// 参拝者の中に車を持っている人がいれば、その人の車（「市村車」なら名字が「市村」の人）に自動でチェックを入れる
+//   チェックを足すだけで、外すことはしない。「別便」「電車」など「車」で終わらないものは対象外
+function checkOwnerCars() {
+    const names = Array.from(document.querySelectorAll('.m-check:checked')).map(el => formatName(el.value).name.replace(/[\s　]+/g, ''));
+    const added = [];
+    document.querySelectorAll('.d-check').forEach(cb => {
+        const m = cb.value.replace(/[\s　]+/g, '').match(/^(.+)車$/);
+        if (!m || cb.checked) return;
+        if (names.some(n => n.startsWith(m[1]))) { cb.checked = true; added.push(cb.value); }
+    });
+    const note = document.getElementById('ownerCarNote');
+    if (note) {
+        note.style.display = added.length ? 'block' : 'none';
+        note.textContent = added.length ? `✅ 参拝する人の車にチェックを入れました：${added.join('・')}` : '';
+    }
 }
 
 function goStep(num) {
